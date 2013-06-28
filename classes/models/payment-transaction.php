@@ -60,7 +60,7 @@ class AWPCP_Payment_Transaction {
 	 * Increment and period are used in a different way in other sections of
 	 * AWPCP. Increment would be D, W, M, Y and period the number.
 	 */
-	public function add_item($id, $name, $increment, $period) {
+	public function add_item($id, $name, $increment, $period, $lineas) {
 		$item = new stdClass();
 		$item->id = $id;
 		$item->name = $name;
@@ -79,12 +79,12 @@ class AWPCP_Payment_Transaction {
 	public function save() {
 		$this->attributes['__errors__'] = $this->errors;
 		$this->attributes['__updated__'] = current_time('mysql');
-var_dump($this->attributes);//die();
+      /*aqui se cambio*/ //var_dump($this->attributes);//die();
 		if (!isset($this->attributes['__created__'])) {
 			$this->attributes['__created__'] = current_time('mysql');
-			add_option("awpcp-payment-transaction-{$this->id}", $this->attributes, '', 'no');
+           		add_option("awpcp-payment-transaction-{$this->id}", $this->attributes, '', 'no');
 		} else {
-			update_option("awpcp-payment-transaction-{$this->id}", $this->attributes);
+           		update_option("awpcp-payment-transaction-{$this->id}", $this->attributes);
 		}
 	}
 }

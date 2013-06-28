@@ -23,7 +23,7 @@
 <?php echo $message ?>
 
 
-<?php endif ?>
+    <?php endif ?>
 <?php _e("If you have questions about your listing contact", 'AWPCP') ?>: <?php echo $thisadminemail ?>
 
 

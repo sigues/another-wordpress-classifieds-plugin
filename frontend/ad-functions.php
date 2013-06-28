@@ -499,9 +499,8 @@ function awpcp_place_ad_payment_step($form_values=array(), $form_errors=array())
 function awpcp_place_ad_checkout_step($form_values=array(), $form_errors=array()) {
 	$values = empty($form_values) ? $_REQUEST : $form_values;
 	$action = $form_values['a'] = awpcp_array_data('a', 'checkout', $values);
-var_dump($values);
-//die();
-	$category = $form_values['category'] = intval(awpcp_array_data('category', 0, $values));
+        
+        $category = $form_values['category'] = intval(awpcp_array_data('category', 0, $values));
 	$term = $form_values['payment-term'] = awpcp_array_data('payment-term', '', $values);
 	$method = $form_values['payment-method'] = awpcp_array_data('payment-method', '', $values);
 
@@ -556,17 +555,18 @@ var_dump($values);
 	$amount = apply_filters('awpcp-place-ad-payment-amount', $term->price, $transaction);
 	$transaction->set('amount', $amount);
         
-        $transaction->set('lineas', $values['renglones']);
-        $transaction->set('fondo',$values['fondo_negro']);
-        $transaction->set('marco',$values['marco']);
+        session_start();
         
+        $_SESSION["lineas"]=$values['renglones'];
+        $_SESSION["fondo"]=$values['fondo_negro'];
+        $_SESSION["marco"]=$values['marco'];
+        $texto = "";
         for($x=1;$x<=$values['renglones'];$x++){
             $nombre_renglon = "renglon_".$x;
-            $texto.=$values[$$nombre_renglon];
+            $texto.=$values[$nombre_renglon].'\n\n';
         }
-        $transaction->set('texto',$texto);
-
-	if ($amount <= 0) {
+        $_SESSION["texto"]=$texto;
+        if ($amount <= 0) {
 		// A payment term with no ID means the board is free (no Ad Fees are being used).
 		// Subscriptions or other payment terms may be enabled, however.
 		if ($term->id <= 0) {
@@ -578,7 +578,7 @@ var_dump($values);
 
 	// begin checkout step
 
-	$transaction->add_item($term->id, $term->name, $term->period, $term->increment);
+	$transaction->add_item($term->id, $term->name, $term->period, $term->increment, $values['renglones']);
 
 	$transaction->set('success-redirect', awpcp_current_url());
 	$transaction->set('success-form', array('a' => 'post-checkout'));
@@ -2364,7 +2364,9 @@ function load_ad_post_form($adid='', $action='', $awpcppagename='',
 		$theformbody.="<br/><input readonly type=\"text\" name=\"remLen\" size=\"10\" maxlength=\"5\" class=\"inputboxmini\" value=\"$addetailsremlength\" />";
 		$theformbody.= '<input readonly type="hidden" name="characters_allowed" value="' . $addetailsmaxlength . '"/>';
 		$theformbody.=__("characters left","AWPCP");
-		$theformbody.="<br/><br/>$htmlstatus<br/><textarea name=\"addetails\" rows=\"10\" cols=\"50\" class=\"textareainput\" onKeyDown=\"textCounter(this.form.addetails, this.form.remLen, this.form.characters_allowed);\" onKeyUp=\"textCounter(this.form.addetails,this.form.remLen, this.form.characters_allowed);\">" . awpcp_esc_textarea($addetails) . "</textarea></p>";
+                //.$_SESSION["texto"]
+                $texto = ($addetails != "" || !isset($addetails)) ? $_SESSION["texto"] : awpcp_esc_textarea($addetails);
+		$theformbody.="<br/><br/>$htmlstatus<br/><textarea name=\"addetails\" rows=\"10\" cols=\"50\" class=\"textareainput\" onKeyDown=\"textCounter(this.form.addetails, this.form.remLen, this.form.characters_allowed);\" onKeyUp=\"textCounter(this.form.addetails,this.form.remLen, this.form.characters_allowed);\">" . $texto . "</textarea></p>";
 
 		$output .= $theformbody;
 
@@ -3411,7 +3413,8 @@ function processadstep1($form_values=array(), &$form_errors=array(), $transactio
 			$txn_id = $transaction->get('txn-id', '');
 			$amount = $transaction->get('amount', 0);
 
-			// TODO: handle all transaction attributes, remove unused attributes from form_values
+                        
+// TODO: handle all transaction attributes, remove unused attributes from form_values
 			$query = "INSERT INTO " . AWPCP_TABLE_ADS . " SET ";
 			$query.= "ad_category_id='$adcategory', ad_category_parent_id='$adcategory_parent_id', ";
 			$query.= "ad_title='$adtitle', ad_details='$addetails', ad_contact_phone='$adcontact_phone', ";
@@ -3424,6 +3427,11 @@ function processadstep1($form_values=array(), &$form_errors=array(), $transactio
 			$query.= "disabled='$disabled', ad_key='$key', ad_transaction_id='$txn_id', ad_fee_paid=$amount, ";
 			$query.= "ad_last_updated=now(), $update_x_fields ad_postdate=now(), user_id=$user_id";
 
+                        $query.= ",lineas='".$_SESSION["lineas"]."'";
+                        $query.= ",fondo='".$_SESSION["fondo"]."'";
+                        $query.= ",marco='".$_SESSION["marco"]."'";
+                        $query.= ",texto='".$_SESSION["texto"]."'";
+                        
 			$res = awpcp_query($query, __LINE__);
 			$ad_id = mysql_insert_id();
 
@@ -3936,13 +3944,30 @@ function ad_success_email($ad_id, $message, $notify_admin = true) {
 	$listingaddedsubject = get_awpcp_option('listingaddedsubject');
 	$mailbodyuser = get_awpcp_option('listingaddedbody');
 	$subjectadmin = __("New classified ad listing posted","AWPCP");
-
+        global $wpdb;
+        $row = $wpdb->get_row( $wpdb->prepare( "SELECT lineas, marco,fondo, texto 
+                        FROM wp_awpcp_ads WHERE ad_id = %s LIMIT 1", $ad_id ) );
 	// emails are sent in plain text, blank lines in templates are required
 	ob_start();
 		include(AWPCP_DIR . 'frontend/templates/email-place-ad-success-user.tpl.php');
 		$user_email_body = ob_get_contents();
 	ob_end_clean();
-
+                $user_email_body .= "
+                    
+                    Lineas:".$row->lineas."
+                    Fondo:".$row->fondo."
+                    Marco:".$row->marco."
+                    Texto:
+";
+                $texto = explode("\n\n",$row->texto);
+                foreach($texto as $c=>$v){
+                    $user_email_body .= "
+                        $v";
+                
+                }
+                
+//                echo $user_email_body ;
+//                die();
 	ob_start();
 		include(AWPCP_DIR . 'frontend/templates/email-place-ad-success-admin.tpl.php');
 		$admin_email_body = ob_get_contents();
